@@ -1,0 +1,101 @@
+The following lines are exist to put RST in a subsystem block.
+bh = []; 
+bh = [bh get_param(b1, 'handle')]; This line to make “b1” parameter equal to t(z) block
+bh = [bh get_param(b2, 'handle')]; This “b2” parameter is for +- block 
+bh = [bh get_param(b3, 'handle')]; This “b3” parameter equates 1/s(z) block 
+bh = [bh get_param(b4, 'handle')]; This “b4” parameter equates R(z) block 
+Simulink.BlockDiagram.createSubSystem(bh);
+open_system(sys);
+function pushbutton6_Callback(hObject, eventdata, handles) 
+This function is used to create the .h file as soon as the user presses pushbutton6 
+- The Parameters details: 
+• hObject To handle pushbutton6 (see GCBO). 
+• eventdata reserved - to be defined in a future version of MATLAB. 
+• handles structure with handles and user data (see GUIDATA). 
+The following lines are made to generate input files header and c 
+[Ts Bp Ap Hr Hs dist P Bm Am]=acquire_data(handles);
+[m,n] = size(Ap); [b,v] = size(Bp);
+[z,x] = size(P) ;
+The header file details:
+fileID = fopen('input.h','w');
+fprintf(fileID,'#ifndef _input_H_\n');
+fclose(fileID);
+The file.c details:
+fileID = fopen('input.cpp','w');
+fprintf(fileID,'#include "input.h"\n');
+fclose(fileID);
+fileID = fopen('input.cpp','a');
+Now we will print A variable
+fprintf(fileID,'const float A[]={');
+for c = 1:n 
+i=c;
+if i==n 
+fprintf(fileID,'%f',Ap(i)) ;
+else
+fprintf(fileID,'%f ,',Ap(i)) ; 
+end
+end
+fprintf(fileID,'} ;\n') ;
+[Ts Bp Ap Hr Hs dist P Bm Am]=acquire_data(handles);
+Handling RST values: R=str2num(get(handles.edit17, 'string'));
+S=str2num(get(handles.edit18, 'string'));
+T=str2num(get(handles.edit19, 'string'));
+c=clock;
+name=sprintf('Subsystem_%d%02d%02d_%02d%02d_%02d', c(1), c(2), c(3), c(4), c(5), round(c(6)));
+sim_time=100;
+t_ref=5; 
+t_dist=50;
+str_Ts=num2str(Ts);
+x=0;
+y=0;
+Now we will Create subsytem from only controllor R S T and generate c code from it:
+subsys=new_system(name); 
+set_param(name, 'stoptime',num2str(sim_time));
+Spacing handling x=x+35;
+b1=add_block('simulink/Discrete/Discrete Filter', [name '/T(z)'], 'position',[x, y, x+195, y+30],... 'numerator',['[' num2str(T) ']'], 'denominator','[1]', 'sampletime',str_Ts);
+x=x+195;
+%>>>>>>>> This is for “T width” Spacing handling 
+x=x+25;
+b2=add_block('simulink/Math Operations/Sum', [name '/Sum1'], 'position',[x, y+5, x+20, y+5+20],... 'inputs','|+-');
+This is for “sum width” x=x+20; 
+add_line(name, 'T(z)/1', 'Sum1/1');
+Spacing handling x=x+35;
+b3=add_block('simulink/Discrete/Discrete Filter', [name '/1//S(z)'], 'position',[x, y, x+195, y+30],... 'numerator','[1]', 'denominator',['[' num2str(S) ']'], 'sampletime',str_Ts); 
+This is for “S width” x=x+195;
+The above lines were made by Abdelrhman Adel Moawad on 28th May 2020. 
+add_line(name, 'Sum1/1', '1//S(z)/1'); 
+x=x-465;
+y=y+110;
+b4=add_block('simulink/Discrete/Discrete Filter', [name '/R(z)'], 'position',[x, y, x+195, y+30],... 'numerator',['[' num2str(R) ']'], 'denominator','[1]', 'sampletime',str_Ts, 'orientation','left'); 
+This for “R” width x=x-195;
+x=x-195;
+add_line(name, 'R(z)/1)', 'Sum1/2');
+add_block('simulink/Commonly Used Blocks/In1',[name, '/in2']);
+add_line(name,'in2/1','R(z)/1'); 
+add_block('simulink/Commonly Used Blocks/In1',[name, '/in1']);
+add_line(name,'in1/1','T(z)/1');
+add_block('simulink/Commonly Used Blocks/Out1',[name, '/out2']);
+add_line(name,'1//S(z)/1','out2/1'); blocks = find_system(subsys, 'SearchDepth', 1); 
+bh = []; 
+for i = 1:length(blocks) bh = [bh get_param(blocks(i), 'handle')];
+end Simulink.BlockDiagram.createSubSystem(bh);
+The following lines generate code c for controller and set config to build this code for tivac (Keil IDE) 
+get_param(name,'SolverType'); 
+set_param(name,'SolverType','Fixed-step'); 
+get_param(name,'BlockReduction'); 
+set_param(name,'BlockReduction','off');
+get_param(name,'CombineSignalStateStructs'); 
+set_param(name,'CombineSignalStateStructs','on');
+get_param(name,'ObjectivePriorities');
+set_param(name,'ObjectivePriorities',{'Execution efficiency'}); 
+get_param(name,'ProdHWDeviceType');
+set_param(name,'ProdHWDeviceType','NXP->Cortex-M4');
+cs = getActiveConfigSet(subsys);
+stf = 'ert.tlc'; 
+tmf = 'ert_default_tmf';
+mc = 'make_rtw'; thd = 'NXP->Cortex-M4'; 
+switchTarget(cs,stf,[]);
+set_param(cs,'TemplateMakefile',tmf);
+set_param(cs,'MakeCommand',mc);
+rtwbuild(subsys);
+The above lines were made by Asem Kamal on 30th May 2020.
